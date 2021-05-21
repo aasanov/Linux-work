@@ -1,0 +1,28 @@
+---
+- hosts: all
+  gather_facts: false
+  become: yes
+  tasks:
+  - name: Creating ansible user
+    user: 
+      name: ansible 
+      comment: "Ansible System" 
+      state: present
+      system: yes
+      shell: /bin/bash
+
+  - name: Placing key
+    authorized_key: 
+      user: ansible
+      state: present
+      key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/id_rsa.pub') }}"
+      exclusive: yes
+
+  - name: Allow 'ansible' user to have passwordless sudo
+    lineinfile:
+        dest: /etc/sudoers
+        state: present
+        regexp: '^ansible'
+        line: 'ansible ALL=(ALL) NOPASSWD: ALL'
+        validate: visudo -cf %s
+

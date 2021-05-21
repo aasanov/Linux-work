@@ -1,0 +1,88 @@
+#Date: 5/21/2021
+#Owner: Arystan Asanov
+#This is how we could update SSL certs if we use only "thinkmarkets.com".
+#Usage can be by limiting the hosts that are hosting "thinkmarkets.com" and running this code against them. 
+#Also, will be easier to run apache and nginx separately :)
+---
+- name: Updating Apache SSL certificates
+  hosts: all
+  become: yes
+  tasks:
+  - name: Uploading 2021 certificates to the server
+    template: 
+      src: "{{ item.src }}"
+      dest: "{{ item.dest }}"
+      owner: root
+      group: root
+      mode: 0400
+      backup: yes
+    with_items:
+      - { src: 'files/SSLCERT.crt', dest: '/etc/httpd/ssl/SSLCERT.crt' }
+      - { src: 'files/SSLKEY.key', dest: '/etc/httpd/ssl/SSLCERT.com.key' }
+
+    notify: 
+      - reload_apache
+  handlers:
+  - name: reload_apache
+    service: 
+      name: httpd
+      state: reloaded
+
+
+
+- name: Updating NGINX SSL certificate
+  hosts: all
+  become: yes
+  tasks:
+  - name: Uploading 2021 certificates to the server
+    template: 
+      src: "{{ item.src }}"
+      dest: "{{ item.dest }}"
+      owner: root
+      group: root
+      mode: 0400
+      backup: yes
+    with_items:
+      - { src: 'files/SSLCERT.crt', dest: '/etc/pki/tls/certs/SSLCERT.crt' }
+      - { src: 'files/SSLKEY.key', dest: '/etc/pki/tls/private/SSLKEY.key' }
+    notify: 
+      - reload_nginx
+
+  - name: Find Nginx configs
+    find:
+      paths: "/etc/nginx/conf.d/"
+      patterns: "*.conf"
+    register: certs_dir
+
+  - name: update certs with the new name in *conf
+    lineinfile: 
+      dest: "{{ item.path }}"
+      backup: yes 
+      state: present
+      backrefs: yes 
+      regexp: '(^(?!#).*ssl_certificate\s).*' 
+      line: '\1/etc/pki/tls/certs/STAR_thinkmarkets.com.crt;'
+    with_items: "{{ certs_dir.files }}"
+    notify: 
+      - reload_nginx
+
+  - name: update keys with the new name in *conf
+    lineinfile: 
+      dest: "{{ item.path }}"
+      backup: yes 
+      state: present
+      backrefs: yes 
+      regexp: '(^(?!#).*ssl_certificate_key\s).*'
+      line: '\1/etc/pki/tls/private/STAR_thinkmarkets.com.key;'
+    with_items: "{{ certs_dir.files }}"
+    notify: 
+      - reload_nginx
+  - name: validate nginx conf
+    command: nginx -t
+    changed_when: false
+
+  handlers:
+  - name: reload_nginx
+    service: 
+      name: nginx
+      state: reloaded

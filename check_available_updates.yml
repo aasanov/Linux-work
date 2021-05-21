@@ -1,0 +1,26 @@
+---
+- hosts: all:!windows
+  name: Check available updates
+  any_errors_fatal: true
+  become: yes
+  gather_facts: false
+  tasks:
+  - name: check for updates (yum)
+    yum: 
+      list: updates 
+      update_cache: true
+    register: yumoutput
+    # when: ansible_os_family == 'CentOS'
+
+  - debug:
+      msg: "{{ yumoutput | json_query(my_query) | join(', ') }} | default('No updates available')"
+    vars:
+      my_query: "results[].{name: name, version: version}"
+    changed_when: yumoutput.results | length > 0
+
+
+
+
+
+  # - debug: 
+  #     msg: "{{ yumoutput.results | map(attribute='name') | list }}"

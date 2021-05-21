@@ -1,0 +1,70 @@
+---
+- hosts: all:!windows
+  name: Servers patching excluding kernel
+  any_errors_fatal: true
+  become: yes
+  tasks:
+
+    - name: Updating System
+      yum: 
+        update_cache: yes
+        name: '*'
+        state: latest
+        exclude: java*,tomcat*,nodejs*,jenkins*,kernel*,neo4j,docker*, mysql*
+        # security: yes
+      register: yumoutput
+      when: ansible_os_family == 'CentOS Linux'
+
+    - name: Removing old packages
+      yum: 
+        exclude: java*,tomcat*,nodejs*,docker*,jenkins*,kernel*, mysql*, neo4j*
+        autoremove: yes
+      register: yumremoved
+      when: ansible_os_family == 'CentOS Linux'
+
+    - name: Create report's folder
+      local_action:
+        module: file
+        owner: root
+        path: /opt/ansible_reports/patching_{{ ansible_date_time.date }}
+        state: directory
+        mode: '755'
+      become: no
+      when: yumoutput.changed
+      run_once: true
+
+
+    - name: Save yum update list locally
+      local_action:
+        module: blockinfile
+        insertafter: EOF
+        backup: yes
+        create: yes                                                                                              
+        marker: "*********** {{ ansible_hostname | regex_replace('^.*-') | lower }}_{{ ansible_date_time.date }} *********** "
+        block: "{{ yumoutput.results |replace('\\n', '\n') }}" 
+        dest: /opt/ansible_reports/patching_{{ ansible_date_time.date }}/updated_packages_{{ ansible_hostname | regex_replace('^.*-') | lower }}_{{ ansible_date_time.date }}.csv
+        owner: root
+      become: no
+      when: yumoutput.changed
+
+    - name: check if services needs to be restarted
+      shell: needs-restarting -s
+      failed_when: false
+      register: restart_required
+      changed_when: restart_required.stdout | length > 0
+      # when: yumoutput.changed
+
+    - name: Restarting services
+      service:
+        name: "{{ item }}"
+        state: restarted
+        use: service
+      loop: "{{ restart_required.stdout_lines +  [ 'systemd-logind','auditd' ] | default([]) }}"
+      when: restart_required |default("") | length > 0
+
+    - name: Updated packages
+      debug:
+        msg: 
+        - "Packages updated: {{ yumoutput.changes.updated |default([None]) | to_nice_yaml}}"
+        - "Packages removed: {{ yumremoved.results |default([None]) | to_nice_yaml}}"
+

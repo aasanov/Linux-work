@@ -1,0 +1,32 @@
+---
+- hosts: all
+  gather_facts: false
+  become: true
+  tasks:
+  - name: Gather the zabbix-agent2 facts
+    ansible.builtin.package_facts:
+      manager: auto
+
+  - name: Print the zabbix-agent2 facts
+    ansible.builtin.debug:
+      var: ansible_facts.packages
+
+  - name: Check if zabbix-agent2 is installed
+    ansible.builtin.debug:
+      msg: "{{ ansible_facts.packages['zabbix-agent2'] | length }} versions of zabbix-agent2 is installed!"
+    when: "'zabbix-agent2' in ansible_facts.packages"
+
+  - name: Gather the zabbix-agent facts
+    ansible.builtin.package_facts:
+      manager: auto
+
+  - name: Print the zabbix-agent facts
+    ansible.builtin.debug:
+      var: ansible_facts.packages
+
+  - name: Check if zabbix-agent is installed
+    ansible.builtin.debug:
+      msg: "{{ ansible_facts.packages['zabbix-agent'] | length }} versions of zabbix-agent is installed!"
+    when: "'zabbix-agent' in ansible_facts.packages"
+
+
